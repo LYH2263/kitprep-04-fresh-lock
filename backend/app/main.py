@@ -5,19 +5,22 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.config import settings
-from app.database import Base, SessionLocal, engine
-from app.services.seed import seed_if_empty
+from app.database import SessionLocal, engine
+from app.services.schema_init import ensure_system_setting, run_light_migrations
+from app.services.seed import ensure_seed_extras, seed_if_empty
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    if settings.seed_on_empty:
-        db = SessionLocal()
-        try:
+    run_light_migrations(engine)
+    db = SessionLocal()
+    try:
+        ensure_system_setting(db)
+        if settings.seed_on_empty:
             seed_if_empty(db)
-        finally:
-            db.close()
+            ensure_seed_extras(db)
+    finally:
+        db.close()
     yield
 
 
