@@ -1,6 +1,6 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from app.models.models import BomLine, Dish, Ingredient, KitchenOrder, OrderLine
+from app.models.models import BomLine, Dish, Ingredient, KitchenOrder, KitchenSettings, OrderLine
 
 def seed_if_empty(db: Session) -> None:
     if (db.scalar(select(func.count()).select_from(Dish)) or 0) > 0:
@@ -10,18 +10,20 @@ def seed_if_empty(db: Session) -> None:
     for code, name in dishes:
         d = Dish(code=code, name=name, portion_unit="份")
         db.add(d); db.flush(); dish_ids[code] = d.id
+    # (code, name, unit, stock_qty 不区分账面, storage_type, 鲜仓, 冻仓)
     ings = [
-        ("I-PR", "五花肉", "kg", 8.0),
-        ("I-EG", "茄子", "kg", 3.0),
-        ("I-CK", "鸡肉", "kg", 5.0),
-        ("I-RC", "大米", "kg", 20.0),
-        ("I-ND", "面条", "kg", 4.0),
-        ("I-SC", "生抽", "L", 2.0),
-        ("I-OL", "食用油", "L", 1.5),
+        ("I-PR", "五花肉", "kg", 0.0, "fresh", 8.0, 5.0),
+        ("I-EG", "茄子", "kg", 0.0, "fresh", 3.0, 0.0),
+        ("I-CK", "鸡肉", "kg", 0.0, "fresh", 5.0, 0.0),
+        ("I-RC", "大米", "kg", 20.0, "", 0.0, 0.0),
+        ("I-ND", "面条", "kg", 4.0, "", 0.0, 0.0),
+        ("I-SC", "生抽", "L", 2.0, "", 0.0, 0.0),
+        ("I-OL", "食用油", "L", 1.5, "", 0.0, 0.0),
     ]
     ing_ids = {}
-    for code, name, unit, stock in ings:
-        i = Ingredient(code=code, name=name, unit=unit, stock_qty=stock)
+    for code, name, unit, stock, stype, fresh, frozen in ings:
+        i = Ingredient(code=code, name=name, unit=unit, stock_qty=stock,
+                       storage_type=stype, fresh_stock_qty=fresh, frozen_stock_qty=frozen)
         db.add(i); db.flush(); ing_ids[code] = i.id
     bom = [
         ("D-HS", "I-PR", 0.25), ("D-HS", "I-RC", 0.15), ("D-HS", "I-SC", 0.02), ("D-HS", "I-OL", 0.03),
@@ -34,4 +36,6 @@ def seed_if_empty(db: Session) -> None:
     db.add(order); db.flush()
     for dcode, portions in [("D-HS", 40), ("D-YC", 30), ("D-JT", 50)]:
         db.add(OrderLine(order_id=order.id, dish_id=dish_ids[dcode], portions=portions))
+    # 「允许冻顶鲜」开关默认关（禁替）
+    db.add(KitchenSettings(id=1, allow_frozen_substitute=False))
     db.commit()
